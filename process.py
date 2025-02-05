@@ -90,6 +90,7 @@ def process(args):
                 # for j in range(0, args.batch):
                 #     slice_index = val_outputs.shape[-1] // 2
                 #     writer.add_image('rec image', torch.tensor(val_outputs[j, :, :, slice_index]), global_step=args.epoch+1)
+                slice_index = val_outputs.shape[-1] // 2
                 writer.add_image('rec image', torch.tensor(val_outputs[0, :, :, slice_index]), global_step=args.epoch+1)
 
         except: 
