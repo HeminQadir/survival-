@@ -1,0 +1,15 @@
+05/02/2024
+
+1. Created N_VAE_UNET.py --> Added time deocder layers and forward method. 
+2. losses.py  --> Added LogLikelihoodLossWithCensoring
+3. process.py --> Added SURV_loss = LogLikelihoodLossWithCensoring(dist_type='weibull')
+4. utils.py  -> modified def train --> logit_map, mu, logvar, weibull_params = model(x)
+            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+            surv_loss = SURV_loss(weibull_params, s_time, risk) 
+            loss = mse_loss + ssim_loss + kl_loss + surv_loss
+   #TODO:  didnot do in the validation loop (sliding_window_inference)
+
+5. Created N_eval.py -->  copy pasted the ci_ibs code
+    #TODO need to install pycox, statsmodels
+    #TODO need to do it for ALL TRAIN DATA per epoch, NOT for every batch or trainloader.
+    #TODO need to compute in the training loop

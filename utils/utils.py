@@ -63,7 +63,7 @@ def validation(args, model, validation_loader, MSE_loss, SSIM_loss, phase="train
     return epoch_loss/len(epoch_iterator), val_outputs
 
 
-def train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler):
+def train(args, model, train_loader, MSE_loss, SSIM_loss, SURV_loss, optimizer, scaler):
     model.train()
     epoch_loss = 0
     epoch_iterator = tqdm(train_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True)
@@ -75,11 +75,13 @@ def train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler):
                                batch['time'].to(args.device))
 
         with torch.cuda.amp.autocast():
-            logit_map = model(x)
+            logit_map, mu, logvar, weibull_params = model(x)
             logit_map = torch.sigmoid(logit_map)
             mse_loss = MSE_loss(logit_map, x)
             ssim_loss = SSIM_loss(logit_map, x)
-            loss = mse_loss + ssim_loss
+            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+            surv_loss = SURV_loss(weibull_params, s_time, event)
+            loss = mse_loss + ssim_loss + kl_loss + surv_loss
             
         scaler.scale(loss).backward()
         epoch_loss += loss.item()

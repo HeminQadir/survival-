@@ -3,7 +3,7 @@ import os
 from tqdm import tqdm
 from dataset.data_split_fold import datafold_read, datafold_read_inference
 from monai.losses import DiceCELoss, DiceLoss
-from losses import SSIMLoss3D
+from losses import SSIMLoss3D, LogLikelihoodLossWithCensoring
 from torch.nn import MSELoss 
 from monai.transforms import AsDiscrete
 
@@ -36,6 +36,9 @@ def process(args):
     torch.backends.cudnn.benchmark = True
     MSE_loss = MSELoss(reduction='mean')
     SSIM_loss = SSIMLoss3D(window_size=11, reduction='mean', channel=1)
+    SURV_loss = LogLikelihoodLossWithCensoring(dist_type='weibull')
+
+
 
     #loss_function = DiceLoss(to_onehot_y=True, softmax=True)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
