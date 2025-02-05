@@ -71,7 +71,7 @@ if __name__ == "__main__":
     mian()
 
 # python train.py --fold 1 --model_name swin --cache_dataset 
-# python train.py --batch_size 5 --device 0 --model_name vae_unet --cache_dataset 
+# python train.py --batch_size 5 --device 0 --model_name unet --cache_dataset 
 # python train.py --batch_size 5 --device 0 --model_name my_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json
 # python train.py --device 2 --phase test --pretrain ./trained_models/text_unet/best_metric_model.pth 
 # --model_name text_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json
