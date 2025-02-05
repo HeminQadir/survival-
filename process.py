@@ -87,10 +87,10 @@ def process(args):
                 writer.add_scalar("Validation/Average Accuracy:", scalar_value=torch.tensor(loss_val), global_step=args.epoch+1)
                 writer.add_scalar("Train/Average Accuracy:", scalar_value=torch.tensor(loss_train), global_step=args.epoch+1)
 
-                for j in range(0, args.batch):
-                    slice_index = val_outputs.shape[-1] // 2
-                    writer.add_image('rec image', torch.tensor(val_outputs[j, :, :, slice_index]), global_step=args.epoch+1)
- 
+                # for j in range(0, args.batch):
+                #     slice_index = val_outputs.shape[-1] // 2
+                #     writer.add_image('rec image', torch.tensor(val_outputs[j, :, :, slice_index]), global_step=args.epoch+1)
+                writer.add_image('rec image', torch.tensor(val_outputs[0, :, :, slice_index]), global_step=args.epoch+1)
 
         except: 
             torch.save(model.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
