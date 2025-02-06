@@ -58,17 +58,19 @@ def process(args):
 
         try: 
             # Traininig 
-            ave_loss = train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler)
+            ave_loss, kl_loss = train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler)
             writer.add_scalar('train_loss', ave_loss, args.epoch)
-
+            writer.add_scalar('train_kl_loss', kl_loss, args.epoch)
+            
+            
             if (args.epoch % args.store_num == 0 and args.epoch != 0):
                     torch.save(model.state_dict(), os.path.join(args.save_directory, "model_epoch_"+str(args.epoch)+"_.pth"))
-
+            
             # Validation 
             if (args.epoch % args.val_interval == 0):
                 print("starting the validation phase")
-                loss_val, val_outputs = validation(args, model, val_loader, MSE_loss, SSIM_loss, phase="validation") 
-                loss_train, train_outputs = validation(args, model, subset_loader, MSE_loss, SSIM_loss, phase="train") 
+                val_inputs, loss_val, val_outputs = validation(args, model, val_loader, MSE_loss, SSIM_loss, phase="validation") 
+                train_inputs, loss_train, train_outputs = validation(args, model, subset_loader, MSE_loss, SSIM_loss, phase="train") 
 
                 if loss_val < loss_val_best:
                     loss_val_best = loss_val
@@ -91,14 +93,15 @@ def process(args):
                 #     slice_index = val_outputs.shape[-1] // 2
                 #     writer.add_image('rec image', torch.tensor(val_outputs[j, :, :, slice_index]), global_step=args.epoch+1)
                 slice_index = val_outputs.shape[-1] // 2
-                writer.add_image('rec image', torch.tensor(val_outputs[0, :, :, slice_index]), global_step=args.epoch+1)
+                writer.add_image('recon image', torch.tensor(val_outputs[0, :, :, slice_index]), global_step=args.epoch+1)
+                writer.add_image('input image', torch.tensor(val_inputs[0, :, :, slice_index]),  global_step=args.epoch+1)
 
         except: 
             torch.save(model.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
 
         
         args.epoch += 1
-        print(args.epoch)
+
 
     torch.save(model.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
     print(f"train completed, best_metric: {loss_val_best:.4f}" f"at iteration: {args.epoch}")

@@ -13,9 +13,33 @@ from monai.networks.layers.factories import Act, Norm
 from monai.utils import alias, export
 import inspect
 
+class TimeDecoder(nn.Module):
+    def __init__(self, input_dim):
+        super(TimeDecoder, self).__init__()
+        # Intermediate dimension
+        intermediate_dim = input_dim * 2  # You can adjust this multiplier as necessary
+        
+        # Define a series of Linear layers and ReLUs
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim  , intermediate_dim * 2 ),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim * 2, intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim, intermediate_dim // 2),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim // 2, 2)  # Outputs the shape and scale parameters
+        )
+        self.softplus = nn.Softplus() 
+
+    def forward(self, z):
+        return self.softplus(self.layers(z))
+    
+    
 @export("monai.networks.nets")
-@alias("MyUnet")
-class MyUNet(nn.Module):
+@alias("SURV_VAE_UNET")
+class SURV_VAE_UNET(nn.Module):
     """
     Enhanced version of UNet which has residual units implemented with the ResidualUnit class.
     The residual part uses a convolution to change the input dimensions to match the output dimensions
@@ -63,8 +87,10 @@ class MyUNet(nn.Module):
 
     Examples::
 
+        from monai.networks.nets import UNet
+
         # 3 layer network with down/upsampling by a factor of 2 at each layer with 2-convolution residual units
-        net = MyUNet(
+        net = SURV_VAE_UNET(
             spatial_dims=2,
             in_channels=1,
             out_channels=1,
@@ -74,7 +100,7 @@ class MyUNet(nn.Module):
         )
 
         # 5 layer network with simple convolution/normalization/dropout/activation blocks defining the layers
-        net = MyUNet(
+        net = SURV_VAE_UNET(
             spatial_dims=2,
             in_channels=1,
             out_channels=1,
@@ -140,7 +166,7 @@ class MyUNet(nn.Module):
         self.adn_ordering = adn_ordering
     
         self.resolution = 12
-
+        
         # The encoder path 
         self.conv_0 = Convolution(
             self.dimensions,
@@ -219,13 +245,12 @@ class MyUNet(nn.Module):
             is_transposed=False,
             adn_ordering=self.adn_ordering,
         )  
-        
 
 
         # The decoder path     
         self.conv_transpose_1 = Convolution(
             self.dimensions,
-            in_channels=channels[-2]+channels[-1],
+            in_channels=channels[-2], #+channels[-1],
             out_channels=channels[-3],
             strides=strides[-2],
             kernel_size=self.up_kernel_size,
@@ -238,12 +263,10 @@ class MyUNet(nn.Module):
             adn_ordering=self.adn_ordering,
             )
         
-        # Define linear layers for initial upsampling
-        #self.Embedd_1 = nn.Sequential(nn.Linear(512, self.resolution*self.resolution*self.resolution), nn.PReLU())
 
         self.conv_transpose_2 = Convolution(
             self.dimensions,
-            in_channels=channels[-3]*2,
+            in_channels=channels[-3], #*2,
             out_channels=channels[-4],
             strides=strides[-3],
             kernel_size=self.up_kernel_size,
@@ -255,13 +278,11 @@ class MyUNet(nn.Module):
             is_transposed=True,
             adn_ordering=self.adn_ordering,
             )
-        
-        # Define linear layers for initial upsampling
-        #self.Embedd_2 = nn.Sequential(nn.Linear(512, self.resolution*2*self.resolution*2*self.resolution*2), nn.PReLU())
+
 
         self.conv_transpose_3 = Convolution(
             self.dimensions,
-            in_channels=channels[-4]*2,
+            in_channels=channels[-4], #*2,
             out_channels=channels[-5],
             strides=strides[-4],
             kernel_size=self.up_kernel_size,
@@ -273,14 +294,11 @@ class MyUNet(nn.Module):
             is_transposed=True,
             adn_ordering=self.adn_ordering,
             )
-        
-
-        # Define linear layers for initial upsampling
-        #self.Embedd_3 = nn.Sequential(nn.Linear(512, self.resolution*4*self.resolution*4*self.resolution*4), nn.PReLU())
+    
 
         self.conv_transpose_4 = Convolution(
             self.dimensions,
-            in_channels=channels[-5]*2,
+            in_channels=channels[-5], #*2,
             out_channels=out_channels,
             strides=strides[-5],
             kernel_size=self.up_kernel_size,
@@ -292,23 +310,125 @@ class MyUNet(nn.Module):
             is_transposed=True,
             adn_ordering=self.adn_ordering,
             )
+        
+        self.conv_mu = Convolution(
+            self.dimensions,
+            in_channels=channels[-1],
+            out_channels=channels[-2],
+            strides=strides[-1],
+            kernel_size=self.up_kernel_size,
+            act=self.act,
+            norm=self.norm,
+            dropout=self.dropout,
+            bias=self.bias,
+            conv_only=True and self.num_res_units == 0,
+            is_transposed=True,
+            adn_ordering=self.adn_ordering,
+            )
+        
+
+        self.conv_logvar = Convolution(
+            self.dimensions, 
+            in_channels=channels[-1],
+            out_channels=channels[-2],
+            strides=strides[-1],
+            kernel_size=self.up_kernel_size,
+            act=self.act,
+            norm=self.norm,
+            dropout=self.dropout,
+            bias=self.bias,
+            conv_only=True and self.num_res_units == 0,
+            is_transposed=True,
+            adn_ordering=self.adn_ordering,
+            )
+        
+
+    # def reparameterize(self, mu, log_var):
+    #     std = torch.exp(0.5 * log_var)
+    #     eps = torch.randn_like(std)
+    #     return mu + eps * std
+
+
+    def reparameterize(self, mu, log_var):
+        # Clamping log_var to avoid numerical instability
+        #log_var = torch.clamp(log_var, min=-10, max=10)
+        std = torch.exp(0.5 * log_var) + 1e-6
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Iterate through the convolutional layers and apply them sequentially
-        
+        #print"I am in the model")
+        # Encoder Part 
         x0 = self.conv_0(x)
+        #printx0.shape)
+        # torch.Size([4, 16, 48, 48, 48])
         x1 = self.conv_1(x0)
+        #printx1.shape)
+        # torch.Size([4, 32, 24, 24, 24])
         x2 = self.conv_2(x1)
+        #printx2.shape)
+        # torch.Size([4, 64, 12, 12, 12]) 
         x3 = self.conv_3(x2)
+        #printx3.shape)
+        # torch.Size([4, 128, 6, 6, 6])
         x4 = self.conv_4(x3)
-        y = self.conv_transpose_1(torch.cat([x3, x4], dim=1))
-        y = self.conv_transpose_2(torch.cat([y, x2], dim=1))
-        y = self.conv_transpose_3(torch.cat([y, x1], dim=1))
-        y = self.conv_transpose_4(torch.cat([y, x0], dim=1))
+        #printx4.shape)
+        # torch.Size([4, 256, 6, 6, 6])
         
-        z = 1
-        logvar = 1
-        mu = 1
-        weibull_params = 1
+        # Latent Space 
+        mu = self.conv_mu(torch.cat([x4], dim=1))
+        logvar = self.conv_logvar(torch.cat([x4], dim=1))
+        z = self.reparameterize(mu, logvar) 
+        #printy.shape)
+        #torch.Size([4, 128, 6, 6, 6])
 
+        # Predict Weibull parameters
+        weibull_params = 1
+        #weibull_params = self.time_decoder(z)
+        #time_samples = self.sample_from_dist(weibull_params, distributions=['weibull'])
+        
+        # Decoder Part 
+        y = self.conv_transpose_1(z) 
+        #printy.shape)
+        y = self.conv_transpose_2(y) 
+        #printy.shape)
+        y = self.conv_transpose_3(y)
+        #printy.shape)
+        y = self.conv_transpose_4(y) 
+        #printy.shape)
+        
+        #print"The end of the model")
+    
         return y, z, logvar, mu, weibull_params
+    
+
+
+# Training 
+# input size torch.Size([4, 1, 96, 96, 96])
+# embed size torch.Size([4, 1, 1, 512])
+# torch.Size([4, 16, 48, 48, 48])
+# torch.Size([4, 32, 24, 24, 24])
+# torch.Size([4, 64, 12, 12, 12])
+# torch.Size([4, 128, 6, 6, 6])
+# torch.Size([4, 256, 6, 6, 6])
+# torch.Size([4, 256, 6, 6, 6])
+# torch.Size([4, 128, 6, 6, 6])
+# torch.Size([4, 64, 12, 12, 12])
+# torch.Size([4, 32, 24, 24, 24])
+# torch.Size([4, 16, 48, 48, 48])
+# torch.Size([4, 2, 96, 96, 96])
+
+# Validation 
+# input size torch.Size([4, 1, 96, 96, 96])
+# embed size torch.Size([4, 1, 1, 512])
+# torch.Size([4, 16, 48, 48, 48])
+# torch.Size([4, 32, 24, 24, 24])
+# torch.Size([4, 64, 12, 12, 12])
+# torch.Size([4, 128, 6, 6, 6])
+# torch.Size([4, 256, 6, 6, 6])
+# torch.Size([1, 256, 6, 6, 6])
+# error 
+
+

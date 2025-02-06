@@ -13,9 +13,43 @@ from monai.networks.layers.factories import Act, Norm
 from monai.utils import alias, export
 import inspect
 
+class TimeDecoder(nn.Module):
+    def __init__(self, input_dim):
+        super(TimeDecoder, self).__init__()
+        # Intermediate dimension
+        intermediate_dim = input_dim * 2  # You can adjust this multiplier as necessary
+        
+        # Define a series of Linear layers and ReLUs
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim  , intermediate_dim * 2 ),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim * 2, intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim, intermediate_dim // 2),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim // 2, 2)  # Outputs the shape and scale parameters
+        )
+        self.softplus = nn.Softplus() 
+
+    def forward(self, z):
+        return self.softplus(self.layers(z))
+    
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
+
+
+class UnFlatten(nn.Module):
+    # NOTE: (size, x, x, x) are being computed manually as of now (this is based on output of encoder)
+    def forward(self, input, size=128): # size=128
+        return input.view(input.size(0), size, 6, 6, 6)
+        # return input.view(input.size(0), size, 6, 6, 6)
+    
 @export("monai.networks.nets")
-@alias("MyUnet")
-class MyUNet(nn.Module):
+@alias("SURV_UNET")
+class SURV_UNET(nn.Module):
     """
     Enhanced version of UNet which has residual units implemented with the ResidualUnit class.
     The residual part uses a convolution to change the input dimensions to match the output dimensions
@@ -63,8 +97,10 @@ class MyUNet(nn.Module):
 
     Examples::
 
+        from monai.networks.nets import UNet
+
         # 3 layer network with down/upsampling by a factor of 2 at each layer with 2-convolution residual units
-        net = MyUNet(
+        net = SURV_UNET(
             spatial_dims=2,
             in_channels=1,
             out_channels=1,
@@ -74,7 +110,7 @@ class MyUNet(nn.Module):
         )
 
         # 5 layer network with simple convolution/normalization/dropout/activation blocks defining the layers
-        net = MyUNet(
+        net = SURV_UNET(
             spatial_dims=2,
             in_channels=1,
             out_channels=1,
@@ -109,6 +145,7 @@ class MyUNet(nn.Module):
         norm: tuple | str = Norm.INSTANCE,
         dropout: float = 0.0,
         bias: bool = True,
+        z_dim=512,
         adn_ordering: str = "NDA",
     ) -> None:
         super().__init__()
@@ -140,175 +177,158 @@ class MyUNet(nn.Module):
         self.adn_ordering = adn_ordering
     
         self.resolution = 12
+        
+        self.encoder = nn.Sequential(
+            
+                    # The encoder path 
+                    Convolution(
+                        self.dimensions,
+                        in_channels=in_channels,
+                        out_channels=channels[0],
+                        strides=strides[0],
+                        kernel_size=self.up_kernel_size,
+                        act=self.act,
+                        norm=self.norm,
+                        dropout=self.dropout,
+                        bias=self.bias,
+                        conv_only=False and self.num_res_units == 0,
+                        is_transposed=False,
+                        adn_ordering=self.adn_ordering,
+                    ),
 
-        # The encoder path 
-        self.conv_0 = Convolution(
-            self.dimensions,
-            in_channels=in_channels,
-            out_channels=channels[0],
-            strides=strides[0],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=False,
-            adn_ordering=self.adn_ordering,
+                    Convolution(
+                        self.dimensions,
+                        in_channels=channels[0],
+                        out_channels=channels[1],
+                        strides=strides[1],
+                        kernel_size=self.up_kernel_size,
+                        act=self.act,
+                        norm=self.norm,
+                        dropout=self.dropout,
+                        bias=self.bias,
+                        conv_only=False and self.num_res_units == 0,
+                        is_transposed=False,
+                        adn_ordering=self.adn_ordering,
+                    ),    
+
+                    Convolution(
+                        self.dimensions,
+                        in_channels=channels[1],
+                        out_channels=channels[2],
+                        strides=strides[2],
+                        kernel_size=self.up_kernel_size,
+                        act=self.act,
+                        norm=self.norm,
+                        dropout=self.dropout,
+                        bias=self.bias,
+                        conv_only=False and self.num_res_units == 0,
+                        is_transposed=False,
+                        adn_ordering=self.adn_ordering,
+                    ),
+
+                    Convolution(
+                        self.dimensions,
+                        in_channels=channels[2],
+                        out_channels=channels[3],
+                        strides=strides[3],
+                        kernel_size=self.up_kernel_size,
+                        act=self.act,
+                        norm=self.norm,
+                        dropout=self.dropout,
+                        bias=self.bias,
+                        conv_only=False and self.num_res_units == 0,
+                        is_transposed=False,
+                        adn_ordering=self.adn_ordering,
+                    ),
+
+                    Convolution(
+                        self.dimensions,
+                        in_channels=channels[3],
+                        out_channels=channels[4],
+                        strides=strides[4],
+                        kernel_size=self.up_kernel_size,
+                        act=self.act,
+                        norm=self.norm,
+                        dropout=self.dropout,
+                        bias=self.bias,
+                        conv_only=False and self.num_res_units == 0,
+                        is_transposed=False,
+                        adn_ordering=self.adn_ordering,
+                    ),
         )
 
-        self.conv_1 = Convolution(
-            self.dimensions,
-            in_channels=channels[0],
-            out_channels=channels[1],
-            strides=strides[1],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=False,
-            adn_ordering=self.adn_ordering,
-        )    
+        self.decoder = nn.Sequential(
+                
+                # The decoder path     
+                Convolution(
+                    self.dimensions,
+                    in_channels=channels[-2], #+channels[-1],
+                    out_channels=channels[-3],
+                    strides=strides[-2],
+                    kernel_size=self.up_kernel_size,
+                    act=self.act,
+                    norm=self.norm,
+                    dropout=self.dropout,
+                    bias=self.bias,
+                    conv_only=False and self.num_res_units == 0,
+                    is_transposed=True,
+                    adn_ordering=self.adn_ordering,
+                    ),
+                
+                Convolution(
+                    self.dimensions,
+                    in_channels=channels[-3], #*2,
+                    out_channels=channels[-4],
+                    strides=strides[-3],
+                    kernel_size=self.up_kernel_size,
+                    act=self.act,
+                    norm=self.norm,
+                    dropout=self.dropout,
+                    bias=self.bias,
+                    conv_only=False and self.num_res_units == 0,
+                    is_transposed=True,
+                    adn_ordering=self.adn_ordering,
+                    ),
 
+                Convolution(
+                    self.dimensions,
+                    in_channels=channels[-4], #*2,
+                    out_channels=channels[-5],
+                    strides=strides[-4],
+                    kernel_size=self.up_kernel_size,
+                    act=self.act,
+                    norm=self.norm,
+                    dropout=self.dropout,
+                    bias=self.bias,
+                    conv_only=False and self.num_res_units == 0,
+                    is_transposed=True,
+                    adn_ordering=self.adn_ordering,
+                    ),
 
-        self.conv_2 = Convolution(
-            self.dimensions,
-            in_channels=channels[1],
-            out_channels=channels[2],
-            strides=strides[2],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=False,
-            adn_ordering=self.adn_ordering,
-        )   
-
-
-        self.conv_3 = Convolution(
-            self.dimensions,
-            in_channels=channels[2],
-            out_channels=channels[3],
-            strides=strides[3],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=False,
-            adn_ordering=self.adn_ordering,
-        )   
-
-
-        self.conv_4 = Convolution(
-            self.dimensions,
-            in_channels=channels[3],
-            out_channels=channels[4],
-            strides=strides[4],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=False,
-            adn_ordering=self.adn_ordering,
-        )  
-        
-
-
-        # The decoder path     
-        self.conv_transpose_1 = Convolution(
-            self.dimensions,
-            in_channels=channels[-2]+channels[-1],
-            out_channels=channels[-3],
-            strides=strides[-2],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=True,
-            adn_ordering=self.adn_ordering,
-            )
-        
-        # Define linear layers for initial upsampling
-        #self.Embedd_1 = nn.Sequential(nn.Linear(512, self.resolution*self.resolution*self.resolution), nn.PReLU())
-
-        self.conv_transpose_2 = Convolution(
-            self.dimensions,
-            in_channels=channels[-3]*2,
-            out_channels=channels[-4],
-            strides=strides[-3],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=True,
-            adn_ordering=self.adn_ordering,
-            )
-        
-        # Define linear layers for initial upsampling
-        #self.Embedd_2 = nn.Sequential(nn.Linear(512, self.resolution*2*self.resolution*2*self.resolution*2), nn.PReLU())
-
-        self.conv_transpose_3 = Convolution(
-            self.dimensions,
-            in_channels=channels[-4]*2,
-            out_channels=channels[-5],
-            strides=strides[-4],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=False and self.num_res_units == 0,
-            is_transposed=True,
-            adn_ordering=self.adn_ordering,
-            )
-        
-
-        # Define linear layers for initial upsampling
-        #self.Embedd_3 = nn.Sequential(nn.Linear(512, self.resolution*4*self.resolution*4*self.resolution*4), nn.PReLU())
-
-        self.conv_transpose_4 = Convolution(
-            self.dimensions,
-            in_channels=channels[-5]*2,
-            out_channels=out_channels,
-            strides=strides[-5],
-            kernel_size=self.up_kernel_size,
-            act=self.act,
-            norm=self.norm,
-            dropout=self.dropout,
-            bias=self.bias,
-            conv_only=True and self.num_res_units == 0,
-            is_transposed=True,
-            adn_ordering=self.adn_ordering,
-            )
+                Convolution(
+                    self.dimensions,
+                    in_channels=channels[-5], #*2,
+                    out_channels=out_channels,
+                    strides=strides[-5],
+                    kernel_size=self.up_kernel_size,
+                    act=self.act,
+                    norm=self.norm,
+                    dropout=self.dropout,
+                    bias=self.bias,
+                    conv_only=True and self.num_res_units == 0,
+                    is_transposed=True,
+                    adn_ordering=self.adn_ordering,
+                    ),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Iterate through the convolutional layers and apply them sequentially
         
-        x0 = self.conv_0(x)
-        x1 = self.conv_1(x0)
-        x2 = self.conv_2(x1)
-        x3 = self.conv_3(x2)
-        x4 = self.conv_4(x3)
-        y = self.conv_transpose_1(torch.cat([x3, x4], dim=1))
-        y = self.conv_transpose_2(torch.cat([y, x2], dim=1))
-        y = self.conv_transpose_3(torch.cat([y, x1], dim=1))
-        y = self.conv_transpose_4(torch.cat([y, x0], dim=1))
+        h = self.encoder(x)
+        y = self.decoder(h)
         
         z = 1
         logvar = 1
         mu = 1
         weibull_params = 1
-
+        
         return y, z, logvar, mu, weibull_params

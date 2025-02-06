@@ -7,6 +7,7 @@ from monai.inferers import sliding_window_inference
 from monai.networks.nets import SwinUNETR, UNet
 from models.MyUNet import MyUNet
 from models.VAE_UNET import VAE_UNET
+from models.SURV_VAE_UNET import SURV_VAE_UNET
 from monai.networks.layers import Norm
 
 from monai.data import decollate_batch
@@ -21,6 +22,7 @@ import torch.nn.functional as F
 
 
 def validation(args, model, validation_loader, MSE_loss, SSIM_loss, phase="train"):
+    
     model.eval()
     epoch_loss = 0
     if phase == "train":
@@ -36,15 +38,15 @@ def validation(args, model, validation_loader, MSE_loss, SSIM_loss, phase="train
                                                      batch['time'].to(args.device))
 
             with torch.cuda.amp.autocast():
-                val_outputs = sliding_window_inference(val_inputs, (args.roi_x, args.roi_y, args.roi_z), 4, model)
-                val_outputs = torch.sigmoid(val_inputs)
+                #val_outputs, z, log_var, mu, weibull_params = sliding_window_inference(val_inputs, (args.roi_x, args.roi_y, args.roi_z), 4, model)
+                val_outputs, z, log_var, mu, weibull_params = model(val_inputs) 
+                val_outputs = torch.sigmoid(val_outputs)
                 # Update the metrics with your batch of images:
                 mse_loss = MSE_loss(val_outputs, val_inputs)
                 ssim_loss = SSIM_loss(val_outputs, val_inputs)
                 loss = mse_loss + ssim_loss
-
+            
             epoch_loss += loss.item()
-
         if phase == "train":
             epoch_iterator.set_description(
                 "Epoch=%d: Testing on training (%d / %d Steps) (total_loss=%2.5f)" % (
@@ -57,15 +59,16 @@ def validation(args, model, validation_loader, MSE_loss, SSIM_loss, phase="train
             )
             
     if  phase == "train":
-        print('Epoch=%d: Average__loss_on_training=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
+        print('Epoch=%d: Average_loss_on_training=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
     else:
-        print('Epoch=%d: Average__loss_on_validation=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
-    return epoch_loss/len(epoch_iterator), val_outputs
+        print('Epoch=%d: Average_loss_on_validation=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
+    return val_inputs, epoch_loss/len(epoch_iterator), val_outputs
 
 
 def train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler):
     model.train()
     epoch_loss = 0
+    epoch_kl = 0
     epoch_iterator = tqdm(train_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True)
 
     for step, batch in enumerate(epoch_iterator):
@@ -75,12 +78,15 @@ def train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler):
                                batch['time'].to(args.device))
 
         with torch.cuda.amp.autocast():
-            logit_map = model(x)
+            logit_map, z, log_var, mu, weibull_params = model(x)
             logit_map = torch.sigmoid(logit_map)
             mse_loss = MSE_loss(logit_map, x)
             ssim_loss = SSIM_loss(logit_map, x)
-            loss = mse_loss + ssim_loss
-            
+            kl_divergence = torch.tensor(0.1) #-0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
+            #kl_weight = 0.00025
+            #kl_divergence = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+            loss = mse_loss + ssim_loss #+ (kl_weight * kl_divergence)
+
         scaler.scale(loss).backward()
         epoch_loss += loss.item()
         scaler.unscale_(optimizer)
@@ -94,10 +100,15 @@ def train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler):
         )
 
         epoch_loss += loss.item()
+
+        epoch_kl += kl_divergence.item()
+
         #torch.cuda.empty_cache()
 
     print('Epoch=%d: Average_train_loss=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
-    return epoch_loss/len(epoch_iterator)
+    print('Epoch=%d: Average_train_kl_loss=%2.5f' % (args.epoch, kl_divergence/len(epoch_iterator)))
+    
+    return epoch_loss/len(epoch_iterator), epoch_kl/len(epoch_iterator)
 
 
 def model_setup(args):
@@ -142,9 +153,19 @@ def model_setup(args):
                 num_res_units=0,
                 norm=Norm.BATCH
         )
+    elif args.model_name == 'surv_vae_unet':
+        model = SURV_VAE_UNET(
+                spatial_dims=3,
+                in_channels=1,
+                out_channels=args.no_class,
+                channels=(16, 32, 64, 128, 256),
+                strides=(2, 2, 2, 2, 1),
+                num_res_units=0,
+                norm=Norm.BATCH
+        )
 
     else: 
-        raise ValueError("The model specified can not be found. Please select from the list [unet, my_unet, resunet, swin, vae_unet].")
+        raise ValueError("The model specified can not be found. Please select from the list [unet, my_unet, surv_vae_unet, resunet, swin, vae_unet].")
 
     # send the model to cuda if available  
     model = model.to(args.device)

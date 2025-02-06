@@ -23,7 +23,7 @@ def mian():
     parser.add_argument('--dataset_json', default='./dataset/dataset_json_files/training_data_nikhil_debug.json', help='data root path')
     parser.add_argument('--save_directory', default='./trained_models', help='path to save the model')
     parser.add_argument('--path_to_save_results', default='./results', help='path to save the results')
-    parser.add_argument('--model_name', default='unet', help='backbone [swinunetr or unet or dints or unetpp]')
+    parser.add_argument('--model_name', default='unet', help='backbone [swinunetr or unet or dints or surv_vae_unet or unetpp]')
     parser.add_argument('--store_num', default=10, type=int, help='Store model how often, epoch based')
     parser.add_argument('--phase', default='train', help='train or test')
 
@@ -71,7 +71,8 @@ if __name__ == "__main__":
     mian()
 
 # python train.py --fold 1 --model_name swin --cache_dataset 
-# python train.py --batch_size 5 --device 0 --model_name unet --cache_dataset 
+# python train.py --batch_size 5 --device 0 --model_name surv_vae_unet --cache_dataset
+# python train.py --batch_size 5 --device 0 --model_name surv_vae_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil.json
 # python train.py --batch_size 5 --device 0 --model_name my_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json
 # python train.py --device 2 --phase test --pretrain ./trained_models/text_unet/best_metric_model.pth 
 # --model_name text_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json
