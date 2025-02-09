@@ -7,6 +7,7 @@ from monai.inferers import sliding_window_inference
 from monai.networks.nets import SwinUNETR, UNet
 from models.MyUNet import MyUNet
 from models.VAE_UNET import VAE_UNET
+from models.VAE_GAN import VAE_GAN
 from monai.networks.layers import Norm
 
 from monai.data import decollate_batch
@@ -20,86 +21,81 @@ import nibabel as nib
 import torch.nn.functional as F
 
 
-def validation(args, model, validation_loader, MSE_loss, SSIM_loss, phase="train"):
+def validation(args, model, validation_loader, criterion_bce, phase="train"):
     model.eval()
-    epoch_loss = 0
-    if phase == "train":
-        epoch_iterator = tqdm(validation_loader, desc="Testing on training (X / X Steps) (loss=X.X)", dynamic_ncols=True)
-    else: 
-        epoch_iterator = tqdm(validation_loader, desc="Testing on validation (X / X Steps) (loss=X.X)", dynamic_ncols=True)
-        
+    epoch_enc_loss = 0
+    epoch_dec_loss = 0
+    epoch_gan_loss = 0
+    
     with torch.no_grad():
-        for step, batch in enumerate(epoch_iterator):
-            val_inputs, val_labels, event, s_time = (batch["image"].to(args.device), 
-                                                     batch["label"].to(args.device), 
-                                                     batch['event'].to(args.device), 
-                                                     batch['time'].to(args.device))
+        for step, batch in enumerate(validation_loader):
+            x = batch["image"].to(args.device)
+            real_labels = torch.ones(x.size(0), 1).to(args.device)
+            fake_labels = torch.zeros(x.size(0), 1).to(args.device)
 
-            with torch.cuda.amp.autocast():
-                val_outputs = sliding_window_inference(val_inputs, (args.roi_x, args.roi_y, args.roi_z), 4, model)
-                val_outputs = torch.sigmoid(val_inputs)
-                # Update the metrics with your batch of images:
-                mse_loss = MSE_loss(val_outputs, val_inputs)
-                ssim_loss = SSIM_loss(val_outputs, val_inputs)
-                loss = mse_loss + ssim_loss
-
-            epoch_loss += loss.item()
-
-        if phase == "train":
-            epoch_iterator.set_description(
-                "Epoch=%d: Testing on training (%d / %d Steps) (total_loss=%2.5f)" % (
-                    args.epoch, step, len(validation_loader), loss.item())
-            )
-        else:
-            epoch_iterator.set_description(
-                "Epoch=%d: Testing on validation (%d / %d Steps) (total_loss=%2.5f)" % (
-                    args.epoch, step, len(validation_loader), loss.item())
-            )
-            
-    if  phase == "train":
-        print('Epoch=%d: Average__loss_on_training=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
-    else:
-        print('Epoch=%d: Average__loss_on_validation=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
-    return epoch_loss/len(epoch_iterator), val_outputs
-
-
-def train(args, model, train_loader, MSE_loss, SSIM_loss, SURV_loss, optimizer, scaler):
-    model.train()
-    epoch_loss = 0
-    epoch_iterator = tqdm(train_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True)
-
-    for step, batch in enumerate(epoch_iterator):
-        x, y, event, s_time = (batch["image"].to(args.device), 
-                               batch["label"].to(args.device), 
-                               batch['event'].to(args.device), 
-                               batch['time'].to(args.device))
-
-        with torch.cuda.amp.autocast():
-            logit_map, mu, logvar, weibull_params = model(x)
-            logit_map = torch.sigmoid(logit_map)
-            mse_loss = MSE_loss(logit_map, x)
-            ssim_loss = SSIM_loss(logit_map, x)
+            recon_x, mu, logvar, Dis_x_tilda = model(x)
             kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-            surv_loss = SURV_loss(weibull_params, s_time, event)
-            loss = mse_loss + ssim_loss + kl_loss + surv_loss
+            Dis_x = model.discriminator(x)
+            Xp = model.decoder(torch.randn_like(mu))
+            Dis_Xp = model.discriminator(Xp.detach())
+
+            loss_GAN = (criterion_bce(Dis_x, real_labels) + criterion_bce(Dis_x_tilda, fake_labels) + criterion_bce(Dis_Xp, fake_labels)) / 3
+            LDislLike = criterion_bce(Dis_x, real_labels)
+
+            Enc_loss = kl_loss + LDislLike
+            Dec_loss = 0.01 * LDislLike - loss_GAN
             
-        scaler.scale(loss).backward()
-        epoch_loss += loss.item()
-        scaler.unscale_(optimizer)
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
+            epoch_enc_loss += Enc_loss.item()
+            epoch_dec_loss += Dec_loss.item()
+            epoch_gan_loss += loss_GAN.item()
+    
+    print(f"Epoch {args.epoch}: Avg Encoder Loss={epoch_enc_loss/len(validation_loader):.4f}, Avg Decoder Loss={epoch_dec_loss/len(validation_loader):.4f}, Avg GAN Loss={epoch_gan_loss/len(validation_loader):.4f}")
+    return epoch_enc_loss / len(validation_loader), epoch_dec_loss / len(validation_loader), epoch_gan_loss / len(validation_loader)
 
-        epoch_iterator.set_description(
-            "Epoch=%d: Training (%d / %d Steps) (total_loss=%2.5f)" % (
-                args.epoch, step, len(train_loader), loss.item())
-        )
 
-        epoch_loss += loss.item()
-        #torch.cuda.empty_cache()
+def train(args, model, train_loader, optimizer_Enc, optimizer_Dec, optimizer_D, scaler):
+    model.train()
+    epoch_enc_loss = 0
+    epoch_dec_loss = 0
+    epoch_gan_loss = 0
+    for step, batch in enumerate(train_loader):
+        x = batch["image"].to(args.device)
+        
+        real_labels = torch.ones(x.size(0), 1).to(args.device)
+        fake_labels = torch.zeros(x.size(0), 1).to(args.device)
+        
+        with torch.cuda.amp.autocast():
+            recon_x, mu, logvar, Dis_x_tilda = model(x)
+            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+            Dis_x = model.discriminator(x)
+            Xp = model.decoder(torch.randn_like(mu))
+            Dis_Xp = model.discriminator(Xp.detach())
+            loss_GAN = (criterion_bce(Dis_x, real_labels) + criterion_bce(Dis_x_tilda, fake_labels) + criterion_bce(Dis_Xp, fake_labels)) / 3
+            criterion_bce = torch.nn.BCELoss()
+            LDislLike = criterion_bce(Dis_x, real_labels)  # BCE loss for real images
 
-    print('Epoch=%d: Average_train_loss=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
-    return epoch_loss/len(epoch_iterator)
+            Enc_loss = kl_loss + LDislLike
+            Dec_loss = 0.01 * LDislLike - loss_GAN
+        
+        optimizer_Enc.zero_grad()
+        Enc_loss.backward()
+        optimizer_Enc.step()
+
+        optimizer_Dec.zero_grad()
+        Dec_loss.backward()
+        optimizer_Dec.step()
+
+        optimizer_D.zero_grad()
+        loss_GAN.backward()
+        optimizer_D.step()
+
+        epoch_enc_loss += Enc_loss.item()
+        epoch_dec_loss += Dec_loss.item()
+        epoch_gan_loss += loss_GAN.item()
+    
+    print(f"Epoch {args.epoch}: Avg Encoder Loss={epoch_enc_loss/len(train_loader):.4f}, Avg Decoder Loss={epoch_dec_loss/len(train_loader):.4f}, Avg GAN Loss={epoch_gan_loss/len(train_loader):.4f}")
+    return epoch_enc_loss / len(train_loader), epoch_dec_loss / len(train_loader), epoch_gan_loss / len(train_loader)
+
 
 
 def model_setup(args):
@@ -144,6 +140,16 @@ def model_setup(args):
                 num_res_units=0,
                 norm=Norm.BATCH
         )
+    elif args.model_name == 'vae_gan':
+        model = VAE_GAN(
+                spatial_dims=3,
+                in_channels=1,
+                out_channels=args.no_class,
+                channels=(16, 32, 64, 128, 256),
+                strides=(2, 2, 2, 2, 1),
+                num_res_units=0,
+                norm=Norm.BATCH
+    )
 
     else: 
         raise ValueError("The model specified can not be found. Please select from the list [unet, my_unet, resunet, swin, vae_unet].")

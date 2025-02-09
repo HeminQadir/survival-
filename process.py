@@ -34,14 +34,29 @@ def process(args):
     train_loader, val_loader, subset_loader = get_loader(train_files, val_files, args)
 
     torch.backends.cudnn.benchmark = True
-    MSE_loss = MSELoss(reduction='mean')
-    SSIM_loss = SSIMLoss3D(window_size=11, reduction='mean', channel=1)
-    SURV_loss = LogLikelihoodLossWithCensoring(dist_type='weibull')
+    # MSE_loss = MSELoss(reduction='mean')
+    # SSIM_loss = SSIMLoss3D(window_size=11, reduction='mean', channel=1)
+    # SURV_loss = LogLikelihoodLossWithCensoring(dist_type='weibull')
 
 
 
     #loss_function = DiceLoss(to_onehot_y=True, softmax=True)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
+    optimizer_Enc = torch.optim.Adam(
+        list(model.encoder.parameters()) + 
+        list(model.conv_mu.parameters()) + 
+        list(model.conv_logvar.parameters()),
+        lr=args.lr
+    )
+    optimizer_Dec = torch.optim.Adam(
+        model.decoder.parameters(), 
+        lr=args.lr
+    )
+
+
+    optimizer_D = torch.optim.Adam(model.discriminator.parameters(), lr=args.lr)
+    criterion_recon = torch.nn.MSELoss()
+    criterion_gan = torch.nn.BCELoss()
+    #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
     scaler = torch.cuda.amp.GradScaler()
     
     # Initialize the metric objects. Set data_range according to your image scaling.
@@ -61,7 +76,7 @@ def process(args):
 
         try: 
             # Traininig 
-            ave_loss = train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler)
+            ave_loss = train(args, model, train_loader,criterion_recon, criterion_gan,  optimizer_G , optimizer_D , scaler)
             writer.add_scalar('train_loss', ave_loss, args.epoch)
 
             if (args.epoch % args.store_num == 0 and args.epoch != 0):
@@ -70,8 +85,8 @@ def process(args):
             # Validation 
             if (args.epoch % args.val_interval == 0):
                 print("starting the validation phase")
-                loss_val, val_outputs = validation(args, model, val_loader, MSE_loss, SSIM_loss, phase="validation") 
-                loss_train, train_outputs = validation(args, model, subset_loader, MSE_loss, SSIM_loss, phase="train") 
+                loss_val, val_outputs = validation(args, model, val_loader, criterion_recon, criterion_gan, phase="validation") 
+                loss_train, train_outputs = validation(args, model, subset_loader, criterion_recon, criterion_gan, phase="train") 
 
                 if loss_val < loss_val_best:
                     loss_val_best = loss_val
