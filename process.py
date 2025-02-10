@@ -53,10 +53,10 @@ def process(args):
 
         try: 
             # Traininig 
-            ave_loss, kl_loss = train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimizerD, scaler, scalerD)
+            ave_loss, kl_loss, dis_loss = train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimizerD, scaler, scalerD)
             writer.add_scalar('train_loss', ave_loss, args.epoch)
             writer.add_scalar('train_kl_loss', kl_loss, args.epoch)
-            
+            writer.add_scalar('train_dis_loss', dis_loss, args.epoch)
             
             if (args.epoch % args.store_num == 0 and args.epoch != 0):
                     torch.save(model.state_dict(), os.path.join(args.save_directory, "model_epoch_"+str(args.epoch)+"_.pth"))

@@ -71,7 +71,7 @@ def train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimize
     D.train()
     epoch_loss = 0
     epoch_kl = 0
-    epoch_disc = 0
+    epoch_dis = 0
     
     epoch_iterator = tqdm(train_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True)
 
@@ -104,29 +104,30 @@ def train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimize
         # Train D 
         ###############################################
         #Real loss
-        optimizerD.zero_grad()
+        # optimizerD.zero_grad()
         
         d_real_loss = criterion(D(x), real_label)
         d_fake_loss = criterion(D(x_rand), fake_label)
         d_recon_loss = criterion(D(x_rec), fake_label)
         
         dis_loss = d_real_loss + d_fake_loss + d_recon_loss
-        dis_loss.backward(retain_graph=True)
+       
+        # dis_loss.backward(retain_graph=True)
         
-        optimizerD.step()
+        # optimizerD.step()
         
         
-        # scalerD.scale(disc_loss).backward(retain_graph=True)
-        # scalerD.unscale_(optimizerD)
-        # scalerD.step(optimizerD)
-        # scalerD.update()
-        # optimizerD.zero_grad()
+        scalerD.scale(dis_loss).backward(retain_graph=True)
+        scalerD.unscale_(optimizerD)
+        scalerD.step(optimizerD)
+        scalerD.update()
+        optimizerD.zero_grad()
         
 
         ###############################################
         # Train G
         ###############################################
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
         
         output_x = D(x)
         d_real_loss = criterion(output_x, real_label)
@@ -135,23 +136,21 @@ def train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimize
         output_z = D(x_rand)
         d_fake_loss = criterion(output_z, fake_label)
 
-        
         d_img_loss = d_real_loss + d_recon_loss+ d_fake_loss
         gen_img_loss = -d_img_loss
         gamma = 20
         err_dec = gamma * (mse_loss + ssim_loss) + gen_img_loss + (kl_weight * kl_divergence)
-
         
-        err_dec.backward(retain_graph=True)
-        optimizer.step()
+        # err_dec.backward(retain_graph=True)
+        # optimizer.step()
         
-        
-        # scaler.scale(loss).backward()
-        # epoch_loss += loss.item()
-        # scaler.unscale_(optimizer)
-        # scaler.step(optimizer)
-        # scaler.update()
-        # optimizer.zero_grad()
+    
+        scaler.scale(err_dec).backward()
+        epoch_loss += err_dec.item()
+        scaler.unscale_(optimizer)
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
         
 
 
@@ -165,14 +164,14 @@ def train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimize
 
         epoch_kl += kl_divergence.item()
         
-        epoch_disc+=dis_loss.item()
+        epoch_dis+=dis_loss.item()
 
         #torch.cuda.empty_cache()
 
-    print('Epoch=%d: Average_train_loss=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
-    print('Epoch=%d: Average_train_kl_loss=%2.5f' % (args.epoch, kl_divergence/len(epoch_iterator)))
+    #print('Epoch=%d: Average_train_loss=%2.5f' % (args.epoch, epoch_loss/len(epoch_iterator)))
+    #print('Epoch=%d: Average_train_kl_loss=%2.5f' % (args.epoch, kl_divergence/len(epoch_iterator)))
     
-    return epoch_loss/len(epoch_iterator), epoch_kl/len(epoch_iterator)
+    return epoch_loss/len(epoch_iterator), epoch_kl/len(epoch_iterator), epoch_dis/len(epoch_iterator)
 
 
 def model_setup(args):
