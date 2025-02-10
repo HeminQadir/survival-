@@ -15,7 +15,7 @@ def mian():
     parser.add_argument("--device", default=2, type=int)
     parser.add_argument("--epoch", default=0)
     parser.add_argument("--fold", default=0, type=int, help="Specify the fold for validation")
-    parser.add_argument('--max_epoch', default=2000, type=int, help='Number of training epoches')
+    parser.add_argument('--max_epoch', default=50, type=int, help='Number of training epoches')
     parser.add_argument('--batch_size', default=1, type=int, help='batch size')
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning rate')
     parser.add_argument('--weight_decay', default=1e-4, help='Weight Decay')
@@ -75,3 +75,4 @@ if __name__ == "__main__":
 # python train.py --batch_size 5 --device 0 --model_name my_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json
 # python train.py --device 2 --phase test --pretrain ./trained_models/text_unet/best_metric_model.pth 
 # --model_name text_unet --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json
+# python train.py --batch_size 5 --device 0 --model_name vae_gan --cache_dataset --dataset_json ./dataset/dataset_json_files/training_data_nikhil_debug.json

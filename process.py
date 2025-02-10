@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 from dataset.dataloader import get_loader, get_loader_inference 
 from utils.utils import *
 from helper import * 
-from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+#from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 import torchvision 
 
 def process(args):
@@ -54,8 +54,8 @@ def process(args):
 
 
     optimizer_D = torch.optim.Adam(model.discriminator.parameters(), lr=args.lr)
-    criterion_recon = torch.nn.MSELoss()
-    criterion_gan = torch.nn.BCELoss()
+    criterion_mse = torch.nn.MSELoss()
+    criterion_bce = torch.nn.BCELoss()
     #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
     scaler = torch.cuda.amp.GradScaler()
     
@@ -76,7 +76,7 @@ def process(args):
 
         try: 
             # Traininig 
-            ave_loss = train(args, model, train_loader,criterion_recon, criterion_gan,  optimizer_G , optimizer_D , scaler)
+            ave_loss, _,_= train(args, model, train_loader, optimizer_Enc, optimizer_Dec, optimizer_D ,criterion_bce,criterion_mse, scaler)
             writer.add_scalar('train_loss', ave_loss, args.epoch)
 
             if (args.epoch % args.store_num == 0 and args.epoch != 0):
@@ -85,8 +85,8 @@ def process(args):
             # Validation 
             if (args.epoch % args.val_interval == 0):
                 print("starting the validation phase")
-                loss_val, val_outputs = validation(args, model, val_loader, criterion_recon, criterion_gan, phase="validation") 
-                loss_train, train_outputs = validation(args, model, subset_loader, criterion_recon, criterion_gan, phase="train") 
+                loss_val, _,_ ,val_outputs= validation(args, model, val_loader, criterion_bce,criterion_mse, phase="validation") 
+                loss_train, _,_, val_outputs = validation(args, model, subset_loader,criterion_bce, criterion_mse, phase="train") 
 
                 if loss_val < loss_val_best:
                     loss_val_best = loss_val
@@ -116,7 +116,7 @@ def process(args):
 
         
         args.epoch += 1
-        print(args.epoch)
+        #print(args.epoch)
 
     torch.save(model.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
     print(f"train completed, best_metric: {loss_val_best:.4f}" f"at iteration: {args.epoch}")

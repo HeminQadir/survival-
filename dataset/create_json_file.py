@@ -39,6 +39,7 @@ def create_json(root_directory, file_path, k_folds=5):
     df = pd.read_excel(file_path)
     
     paitents = os.listdir(root_directory)
+    #print(paitents)
     
     sublists = split_list_into_sublists(paitents, k_folds=k_folds)
 
@@ -48,6 +49,7 @@ def create_json(root_directory, file_path, k_folds=5):
     # Iterate through each fold
     fold = 0
     for train_index in sublists:
+        #train_index = train_index[:4]
         #print(fold)
         #print(train_index)
         #print("*"*40)
@@ -59,11 +61,26 @@ def create_json(root_directory, file_path, k_folds=5):
         for file_images, file_labels in zip(fold_files_images, fold_files_labels):
             parts = file_images.split('/')
 
-            row = df[df['Patient-ID'] == parts[5]]
+            patient_id = parts[6]
+            #print(patient_id)
+            row = df[df['Patient-ID'] == patient_id]
+
+            if row.empty:
+                print(f"Warning: No data found for patient {patient_id}")
+                continue
+
+            # Retrieve survival time and event status, ensuring no errors
+            try:
+                survival_time = round(row['overall_survival_months'].values[0], 4)
+                event = row['vital_status'].values[0]  # Assuming 'vital_status' is the event indicator
+            except IndexError:
+                print(f"Warning: Missing survival or event data for patient {patient_id}")
+                continue  # Skip this patient
+
 
             # Retrieve survival time and event status
-            survival_time =  round(row['overall_survival_months'].values[0], 4)
-            event = row['vital_status'].values[0]  # Assuming 'vital_status' is the event indicator
+            #survival_time =  round(row['overall_survival_months'].values[0], 4)
+            #event = row['vital_status'].values[0]  # Assuming 'vital_status' is the event indicator
             example_data = {"fold": fold, "image":  file_images, "label": file_labels, "event": int(event), "time": survival_time}
             training_data.append(example_data)
 
@@ -77,13 +94,14 @@ def create_json(root_directory, file_path, k_folds=5):
 
 
     # Write the JSON string to a file
-    with open("training_data_nikhil.json", "w") as json_file:
+    with open("training_data_nikhil_debug.json", "w") as json_file:
         json_file.write(json_string)
             
            
 if __name__ == "__main__":
     
-    file_path = "/home/hemin/Survival_Nikhil//input/crlm.xlsx"  
-    root_directory = "/home/hemin/Survival_Nikhil/data"  
+    file_path = "/home/nikhil/g17p3/g17-p3/input/crlm.xlsx"  
+    #root_directory = "/home/hemin/Survival_Nikhil/data"
+    root_directory = "/home/nikhil/g17p3/g17-p3/Converted_NIfTI"  
     create_json(root_directory, file_path)
 

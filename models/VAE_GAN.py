@@ -5,12 +5,12 @@ from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
-
+import monai
 from monai.networks.blocks.convolutions import Convolution, ResidualUnit
 #from .convoluions import Convolution
 from monai.networks.layers.factories import Act, Norm
 #from monai.networks.layers.simplelayers import SkipConnection
-from monai.utils import alias, export
+from monai.utils import alias
 import inspect
 
 
@@ -40,7 +40,7 @@ class EmbedFC(nn.Module):
         return self.model(x)
     
 
-@export("monai.networks.nets")
+#@export("monai.networks.nets")
 @alias("VAE_GAN")
 class VAE_GAN(nn.Module):
     def __init__(
@@ -149,8 +149,22 @@ class VAE_GAN(nn.Module):
             nn.Conv3d(128, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm3d(256),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv3d(256, 1, kernel_size=4, stride=1, padding=0),
-            nn.Sigmoid()
+            # Fourth Conv3d layer with 512 filters
+            nn.Conv3d(256, 512, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm3d(512),
+            nn.LeakyReLU(0.2, inplace=True),
+            
+            # Fifth Conv3d layer with 1024 filters
+            nn.Conv3d(512, 1024, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm3d(1024),
+            nn.LeakyReLU(0.2, inplace=True),
+            
+            # Flatten layer
+            nn.Flatten(),
+            
+            # Fully connected layer to output a single value (scalar)
+            nn.Linear(1024 * 3 * 3 * 3, 1),  # Adjust size based on input dimensions
+            nn.Sigmoid()  # Sigmoid to output a value between 0 and 1
         )
 
     def reparameterize(self, mu, log_var):

@@ -2,164 +2,143 @@
     "training": [
         {
             "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1012/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1012/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1179/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1179/seg.nii.gz",
             "event": 1,
-            "time": 65.3333
+            "time": 37.5333
         },
         {
             "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1114/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1114/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1117/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1117/seg.nii.gz",
             "event": 0,
-            "time": 70.5667
+            "time": 76.7667
         },
         {
             "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1158/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1158/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1124/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1124/seg.nii.gz",
             "event": 1,
-            "time": 60.7
+            "time": 52.4333
         },
         {
             "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1176/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1176/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1174/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1174/seg.nii.gz",
             "event": 1,
-            "time": 19.2667
-        },
-        {
-            "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1072/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1072/seg.nii.gz",
-            "event": 0,
-            "time": 34.9333
-        },
-        {
-            "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1079/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1079/seg.nii.gz",
-            "event": 0,
-            "time": 104.4333
-        },
-        {
-            "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1188/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1188/seg.nii.gz",
-            "event": 0,
-            "time": 105.1
+            "time": 67.4667
         },
         {
             "fold": 1,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1133/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1133/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1064/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1064/seg.nii.gz",
+            "event": 1,
+            "time": 77.5
+        },
+        {
+            "fold": 1,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1053/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1053/seg.nii.gz",
+            "event": 1,
+            "time": 33.4667
+        },
+        {
+            "fold": 1,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1147/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1147/seg.nii.gz",
             "event": 0,
-            "time": 90.2333
-        },
-        {
-            "fold": 0,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1067/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1067/seg.nii.gz",
-            "event": 1,
-            "time": 63.8333
+            "time": 114.8333
         },
         {
             "fold": 1,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1126/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1126/seg.nii.gz",
-            "event": 1,
-            "time": 31.7667
-        },
-        {
-            "fold": 1,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1181/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1181/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1181/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1181/seg.nii.gz",
             "event": 1,
             "time": 30.5667
         },
         {
-            "fold": 1,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1005/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1005/seg.nii.gz",
-            "event": 0,
-            "time": 24.7
-        },
-        {
-            "fold": 1,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1141/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1141/seg.nii.gz",
-            "event": 0,
-            "time": 69.3333
-        },
-        {
-            "fold": 1,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1099/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1099/seg.nii.gz",
+            "fold": 2,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1157/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1157/seg.nii.gz",
             "event": 1,
-            "time": 11.0667
+            "time": 53.4333
         },
         {
             "fold": 2,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1080/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1080/seg.nii.gz",
-            "event": 0,
-            "time": 97.2667
-        },
-        {
-            "fold": 2,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1187/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1187/seg.nii.gz",
-            "event": 1,
-            "time": 22.5667
-        },
-        {
-            "fold": 2,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1032/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1032/seg.nii.gz",
-            "event": 1,
-            "time": 72.5333
-        },
-        {
-            "fold": 3,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1194/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1194/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1194/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1194/seg.nii.gz",
             "event": 1,
             "time": 25.0667
         },
         {
+            "fold": 2,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1126/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1126/seg.nii.gz",
+            "event": 1,
+            "time": 31.7667
+        },
+        {
+            "fold": 2,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1102/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1102/seg.nii.gz",
+            "event": 1,
+            "time": 82.0
+        },
+        {
             "fold": 3,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1088/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1088/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1059/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1059/seg.nii.gz",
             "event": 1,
-            "time": 26.8333
+            "time": 24.3
         },
         {
             "fold": 3,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1015/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1015/seg.nii.gz",
-            "event": 0,
-            "time": 88.6
-        },
-        {
-            "fold": 4,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1069/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1069/seg.nii.gz",
-            "event": 0,
-            "time": 64.3667
-        },
-        {
-            "fold": 4,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1198/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1198/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1144/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1144/seg.nii.gz",
             "event": 1,
-            "time": 98.8667
+            "time": 54.9
+        },
+        {
+            "fold": 3,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1153/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1153/seg.nii.gz",
+            "event": 1,
+            "time": 44.0667
+        },
+        {
+            "fold": 3,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1141/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1141/seg.nii.gz",
+            "event": 0,
+            "time": 69.3333
         },
         {
             "fold": 4,
-            "image": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1057/output.nii.gz",
-            "label": "/home/hemin/survival_with_reconstraction/data/CRLM-CT-1057/seg.nii.gz",
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1150/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1150/seg.nii.gz",
             "event": 1,
-            "time": 102.6
+            "time": 75.9667
+        },
+        {
+            "fold": 4,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1171/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1171/seg.nii.gz",
+            "event": 1,
+            "time": 102.9
+        },
+        {
+            "fold": 4,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1104/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1104/seg.nii.gz",
+            "event": 1,
+            "time": 36.4333
+        },
+        {
+            "fold": 4,
+            "image": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1162/output.nii.gz",
+            "label": "/home/nikhil/g17p3/g17-p3/Converted_NIfTI/CRLM-CT-1162/seg.nii.gz",
+            "event": 0,
+            "time": 60.4
         }
     ]
 }

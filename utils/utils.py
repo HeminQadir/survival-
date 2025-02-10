@@ -5,7 +5,7 @@ from monai.inferers import sliding_window_inference
 #from .inferer import sliding_window_inference
 
 from monai.networks.nets import SwinUNETR, UNet
-from models.MyUNet import MyUNet
+#from models.MyUNet import MyUNet
 from models.VAE_UNET import VAE_UNET
 from models.VAE_GAN import VAE_GAN
 from monai.networks.layers import Norm
@@ -17,7 +17,7 @@ from helper import *
 import torch
 import os
 import random
-import nibabel as nib
+#import nibabel as nib
 import torch.nn.functional as F
 
 
@@ -29,69 +29,161 @@ def validation(args, model, validation_loader, criterion_bce, phase="train"):
     
     with torch.no_grad():
         for step, batch in enumerate(validation_loader):
-            x = batch["image"].to(args.device)
-            real_labels = torch.ones(x.size(0), 1).to(args.device)
-            fake_labels = torch.zeros(x.size(0), 1).to(args.device)
+                #model.to(args.device)
+                x = batch["image"].to(args.device)
+                #print('x.shape0', x.shape[0])
+                epoch_enc_loss = 0.0
+                epoch_dec_loss = 0.0
+                epoch_gan_loss = 0.0
+                optimizer_Enc1 = torch.optim.Adam(
+                    list(model.encoder.parameters()) + 
+                    list(model.conv_mu.parameters()) + 
+                    list(model.conv_logvar.parameters()),
+                    lr=args.lr
+                )
+                optimizer_Dec1 = torch.optim.Adam(
+                    model.decoder.parameters(), 
+                    lr=args.lr
+                )
+                optimizer_D1 = torch.optim.Adam(model.discriminator.parameters(), lr=args.lr)
+                
+                real_labels = torch.ones(x.size(0),1).to(args.device)
+                
+                fake_labels = torch.zeros(x.size(0), 1).to(args.device)
+                criterion_bce = criterion_bce.to(args.device)
+                criterion_mse = criterion_mse.to(args.device)
+                # real_labels = real_labels.to(torch.float16)  # Convert to float16
+                # fake_labels = fake_labels.to(torch.float16)
+                #print('real_labels',real_labels)
+                #with torch.cuda.amp.autocast():
+                    
+                recon_x, mu, logvar, Dis_x_tilda = model(x)
+                kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+                Dis_x = model.discriminator(x)
+                #print('Dis_X',Dis_x.shape)
+                Xp = model.decoder(torch.randn_like(mu))
+                Dis_Xp = model.discriminator(Xp.detach())
+                #Train Discriminator
+                optimizer_D1.zero_grad()
+                d_real_loss = criterion_bce(Dis_x, real_labels)
+                d_recon_loss = criterion_bce(Dis_x_tilda, fake_labels)
+                d_fake_loss = criterion_bce(Dis_Xp, fake_labels)
 
-            recon_x, mu, logvar, Dis_x_tilda = model(x)
-            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-            Dis_x = model.discriminator(x)
-            Xp = model.decoder(torch.randn_like(mu))
-            Dis_Xp = model.discriminator(Xp.detach())
+                Total_Dis_Loss = d_real_loss, d_recon_loss, d_fake_loss
+                Total_Dis_Loss.backward(retain_graph =True)
+                optimizer_D1.step()
 
-            loss_GAN = (criterion_bce(Dis_x, real_labels) + criterion_bce(Dis_x_tilda, fake_labels) + criterion_bce(Dis_Xp, fake_labels)) / 3
-            LDislLike = criterion_bce(Dis_x, real_labels)
+                #Train Generator/Decoder
+                optimizer_Dec1.zero_grad()
+                rec_loss = criterion_mse(recon_x, x)
+                Total_Dec_Loss = 0.001*rec_loss - (d_real_loss, d_recon_loss, d_fake_loss)
+                Total_Dec_Loss.backward(retain_graph =True)
+                optimizer_Dec1.step()
 
-            Enc_loss = kl_loss + LDislLike
-            Dec_loss = 0.01 * LDislLike - loss_GAN
-            
-            epoch_enc_loss += Enc_loss.item()
-            epoch_dec_loss += Dec_loss.item()
-            epoch_gan_loss += loss_GAN.item()
+                #Train Encoder
+                Total_Enc_Loss = kl_loss + 0.1*rec_loss
+                optimizer_Enc1.zero_grad()
+                Total_Enc_Loss.backward()
+                optimizer_Enc1.step()
+
+                print("Enc_loss:", Total_Enc_Loss.item())
+                print("Dec_loss:", Total_Dec_Loss.item())
+                print("loss_GAN:", Total_Dis_Loss.item())
+
+                epoch_enc_loss += Total_Enc_Loss.item()
+                epoch_dec_loss += Total_Dec_Loss.item()
+                epoch_gan_loss += Total_Dis_Loss.item()
+                
+        print(f"Epoch {args.epoch}: Avg Encoder Loss={epoch_enc_loss/len(validation_loader):.4f}, Avg Decoder Loss={epoch_dec_loss/len(validation_loader):.4f}, Avg GAN Loss={epoch_gan_loss/len(validation_loader):.4f}")
+        return epoch_enc_loss / len(validation_loader), epoch_dec_loss / len(validation_loader), epoch_gan_loss / len(validation_loader), recon_x
+
+
+def train(args, model, train_loader, optimizer_Enc, optimizer_Dec, optimizer_D,criterion_bce,criterion_mse, scaler):
     
-    print(f"Epoch {args.epoch}: Avg Encoder Loss={epoch_enc_loss/len(validation_loader):.4f}, Avg Decoder Loss={epoch_dec_loss/len(validation_loader):.4f}, Avg GAN Loss={epoch_gan_loss/len(validation_loader):.4f}")
-    return epoch_enc_loss / len(validation_loader), epoch_dec_loss / len(validation_loader), epoch_gan_loss / len(validation_loader)
-
-
-def train(args, model, train_loader, optimizer_Enc, optimizer_Dec, optimizer_D, scaler):
     model.train()
-    epoch_enc_loss = 0
-    epoch_dec_loss = 0
-    epoch_gan_loss = 0
+
+    # for param in model.decoder.parameters():
+    #     if param.requires_grad:
+    #         print("Decoder params are being updated")
+    #     else:
+    #         print("Decoder params are frozen!")
+
+    # for param in model.discriminator.parameters():
+    #     if param.requires_grad:
+    #         print("Discriminator params are being updated")
+    #     else:
+    #         print("Discriminator params are frozen!")
+
+
+
     for step, batch in enumerate(train_loader):
+        #model.to(args.device)
         x = batch["image"].to(args.device)
+        #print('x.shape0', x.shape[0])
+        epoch_enc_loss = 0.0
+        epoch_dec_loss = 0.0
+        epoch_gan_loss = 0.0
+        optimizer_Enc1 = torch.optim.Adam(
+            list(model.encoder.parameters()) + 
+            list(model.conv_mu.parameters()) + 
+            list(model.conv_logvar.parameters()),
+            lr=args.lr
+        )
+        optimizer_Dec1 = torch.optim.Adam(
+            model.decoder.parameters(), 
+            lr=args.lr
+        )
+        optimizer_D1 = torch.optim.Adam(model.discriminator.parameters(), lr=args.lr)
+        print('0'*10)
+        real_labels = torch.ones(x.size(0),1).to(args.device)
         
-        real_labels = torch.ones(x.size(0), 1).to(args.device)
         fake_labels = torch.zeros(x.size(0), 1).to(args.device)
+        criterion_bce = criterion_bce.to(args.device)
+        criterion_mse = criterion_mse.to(args.device)
+        # real_labels = real_labels.to(torch.float16)  # Convert to float16
+        # fake_labels = fake_labels.to(torch.float16)
+        #print('real_labels',real_labels)
+        #with torch.cuda.amp.autocast():
+        print('1'*10)    
+        recon_x, mu, logvar, Dis_x_tilda = model(x)
+        kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+        Dis_x = model.discriminator(x)
+        #print('Dis_X',Dis_x.shape)
+        Xp = model.decoder(torch.randn_like(mu))
+        Dis_Xp = model.discriminator(Xp.detach())
+        #Train Discriminator
+        optimizer_D1.zero_grad()
+        d_real_loss = criterion_bce(Dis_x, real_labels)
+        d_recon_loss = criterion_bce(Dis_x_tilda, fake_labels)
+        d_fake_loss = criterion_bce(Dis_Xp, fake_labels)
+        print('2'*10)
+        Total_Dis_Loss = d_real_loss, d_recon_loss, d_fake_loss
+        Total_Dis_Loss.backward(retain_graph =True)
+        optimizer_D1.step()
+        print('3'*10)
+        #Train Generator/Decoder
+        optimizer_Dec1.zero_grad()
+        rec_loss = criterion_mse(recon_x, x)
+        Total_Dec_Loss = 0.01*rec_loss - (d_real_loss, d_recon_loss, d_fake_loss)
+        print('4'*10)
+        Total_Dec_Loss.backward(retain_graph =True)
+        print('5'*10)
+        optimizer_Dec1.step()
         
-        with torch.cuda.amp.autocast():
-            recon_x, mu, logvar, Dis_x_tilda = model(x)
-            kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-            Dis_x = model.discriminator(x)
-            Xp = model.decoder(torch.randn_like(mu))
-            Dis_Xp = model.discriminator(Xp.detach())
-            loss_GAN = (criterion_bce(Dis_x, real_labels) + criterion_bce(Dis_x_tilda, fake_labels) + criterion_bce(Dis_Xp, fake_labels)) / 3
-            criterion_bce = torch.nn.BCELoss()
-            LDislLike = criterion_bce(Dis_x, real_labels)  # BCE loss for real images
+        #Train Encoder
+        Total_Enc_Loss = kl_loss + 0.01*rec_loss
+        optimizer_Enc1.zero_grad()
+        Total_Enc_Loss.backward()
+        optimizer_Enc1.step()
 
-            Enc_loss = kl_loss + LDislLike
-            Dec_loss = 0.01 * LDislLike - loss_GAN
+        print("Enc_loss:", Total_Enc_Loss.item())
+        print("Dec_loss:", Total_Dec_Loss.item())
+        print("loss_GAN:", Total_Dis_Loss.item())
+
+        epoch_enc_loss += Total_Enc_Loss.item()
+        epoch_dec_loss += Total_Dec_Loss.item()
+        epoch_gan_loss += Total_Dis_Loss.item()
         
-        optimizer_Enc.zero_grad()
-        Enc_loss.backward()
-        optimizer_Enc.step()
-
-        optimizer_Dec.zero_grad()
-        Dec_loss.backward()
-        optimizer_Dec.step()
-
-        optimizer_D.zero_grad()
-        loss_GAN.backward()
-        optimizer_D.step()
-
-        epoch_enc_loss += Enc_loss.item()
-        epoch_dec_loss += Dec_loss.item()
-        epoch_gan_loss += loss_GAN.item()
     
     print(f"Epoch {args.epoch}: Avg Encoder Loss={epoch_enc_loss/len(train_loader):.4f}, Avg Decoder Loss={epoch_dec_loss/len(train_loader):.4f}, Avg GAN Loss={epoch_gan_loss/len(train_loader):.4f}")
     return epoch_enc_loss / len(train_loader), epoch_dec_loss / len(train_loader), epoch_gan_loss / len(train_loader)
