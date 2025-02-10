@@ -11,45 +11,15 @@ from monai.networks.blocks.convolutions import Convolution, ResidualUnit
 from monai.networks.layers.factories import Act, Norm
 #from monai.networks.layers.simplelayers import SkipConnection
 from monai.utils import alias, export
-import inspect
+from torch.nn import functional as F
 
-class TimeDecoder(nn.Module):
-    def __init__(self, input_dim):
-        super(TimeDecoder, self).__init__()
-        # Intermediate dimension
-        intermediate_dim = input_dim * 2  # You can adjust this multiplier as necessary
-        
-        # Define a series of Linear layers and ReLUs
-        self.layers = nn.Sequential(
-            nn.Linear(input_dim, intermediate_dim),
-            nn.ReLU(),
-            nn.Linear(intermediate_dim  , intermediate_dim * 2 ),
-            nn.ReLU(),
-            nn.Linear(intermediate_dim * 2, intermediate_dim),
-            nn.ReLU(),
-            nn.Linear(intermediate_dim, intermediate_dim // 2),
-            nn.ReLU(),
-            nn.Linear(intermediate_dim // 2, 2)  # Outputs the shape and scale parameters
-        )
-        self.softplus = nn.Softplus() 
-
-    def forward(self, z):
-        return self.softplus(self.layers(z))
-    
 class Flatten(nn.Module):
     def forward(self, input):
         return input.view(input.size(0), -1)
-
-
-class UnFlatten(nn.Module):
-    # NOTE: (size, x, x, x) are being computed manually as of now (this is based on output of encoder)
-    def forward(self, input, size=128): # size=128
-        return input.view(input.size(0), size, 6, 6, 6)
-        # return input.view(input.size(0), size, 6, 6, 6)
     
 @export("monai.networks.nets")
-@alias("SURV_VAE_UNET")
-class SURV_VAE_UNET(nn.Module):
+@alias("Discriminator")
+class Discriminator(nn.Module):
     """
     Enhanced version of UNet which has residual units implemented with the ResidualUnit class.
     The residual part uses a convolution to change the input dimensions to match the output dimensions
@@ -100,7 +70,7 @@ class SURV_VAE_UNET(nn.Module):
         from monai.networks.nets import UNet
 
         # 3 layer network with down/upsampling by a factor of 2 at each layer with 2-convolution residual units
-        net = SURV_VAE_UNET(
+        net = Discriminator(
             spatial_dims=2,
             in_channels=1,
             out_channels=1,
@@ -110,7 +80,7 @@ class SURV_VAE_UNET(nn.Module):
         )
 
         # 5 layer network with simple convolution/normalization/dropout/activation blocks defining the layers
-        net = SURV_VAE_UNET(
+        net = Discriminator(
             spatial_dims=2,
             in_channels=1,
             out_channels=1,
@@ -145,7 +115,6 @@ class SURV_VAE_UNET(nn.Module):
         norm: tuple | str = Norm.INSTANCE,
         dropout: float = 0.0,
         bias: bool = True,
-        z_dim=1024,
         adn_ordering: str = "NDA",
     ) -> None:
         super().__init__()
@@ -255,136 +224,30 @@ class SURV_VAE_UNET(nn.Module):
                         is_transposed=False,
                         adn_ordering=self.adn_ordering,
                     ),
+
+                    Convolution(
+                        self.dimensions,
+                        in_channels=channels[4],
+                        out_channels=1,
+                        strides=strides[4],
+                        kernel_size=self.up_kernel_size,
+                        act=self.act,
+                        norm=self.norm,
+                        dropout=self.dropout,
+                        bias=self.bias,
+                        conv_only=False and self.num_res_units == 0,
+                        is_transposed=False,
+                        adn_ordering=self.adn_ordering,
+                    ),
                     Flatten()
-
         )
         
-        self.decoder = nn.Sequential(
-                UnFlatten(),
-                # The decoder path     
-                Convolution(
-                    self.dimensions,
-                    in_channels=channels[-2], #+channels[-1],
-                    out_channels=channels[-3],
-                    strides=strides[-2],
-                    kernel_size=self.up_kernel_size,
-                    act=self.act,
-                    norm=self.norm,
-                    dropout=self.dropout,
-                    bias=self.bias,
-                    conv_only=False and self.num_res_units == 0,
-                    is_transposed=True,
-                    adn_ordering=self.adn_ordering,
-                    ),
-                
-                Convolution(
-                    self.dimensions,
-                    in_channels=channels[-3], #*2,
-                    out_channels=channels[-4],
-                    strides=strides[-3],
-                    kernel_size=self.up_kernel_size,
-                    act=self.act,
-                    norm=self.norm,
-                    dropout=self.dropout,
-                    bias=self.bias,
-                    conv_only=False and self.num_res_units == 0,
-                    is_transposed=True,
-                    adn_ordering=self.adn_ordering,
-                    ),
-
-                Convolution(
-                    self.dimensions,
-                    in_channels=channels[-4], #*2,
-                    out_channels=channels[-5],
-                    strides=strides[-4],
-                    kernel_size=self.up_kernel_size,
-                    act=self.act,
-                    norm=self.norm,
-                    dropout=self.dropout,
-                    bias=self.bias,
-                    conv_only=False and self.num_res_units == 0,
-                    is_transposed=True,
-                    adn_ordering=self.adn_ordering,
-                    ),
-
-                Convolution(
-                    self.dimensions,
-                    in_channels=channels[-5], #*2,
-                    out_channels=out_channels,
-                    strides=strides[-5],
-                    kernel_size=self.up_kernel_size,
-                    act=self.act,
-                    norm=self.norm,
-                    dropout=self.dropout,
-                    bias=self.bias,
-                    conv_only=True and self.num_res_units == 0,
-                    is_transposed=True,
-                    adn_ordering=self.adn_ordering,
-                    ),
-        
-        )
-    
-        # fully connected layers to compute mu and sigma
-        # z_dim is set by user
-        # h_dim should be computed manually based on output of convs (in this case 27648)
-        self.fc1 = nn.Linear(55296, z_dim)
-        self.fc2 = nn.Linear(55296, z_dim)
-        # self.fc1 = nn.Linear(h_dim, z_dim)
-        # self.fc2 = nn.Linear(h_dim, z_dim)
-
-        # self.fc3 = nn.Linear(z_dim, h_dim) # dense layer to connect to decoder
-        self.fc3 = nn.Linear(z_dim, 27648)
-
-    def reparameterize(self, mu, logvar):
-        # Clamping log_var to avoid numerical instability
-        logvar = torch.clamp(logvar, min=-10, max=10)
-        std = torch.exp(0.5 * logvar) + 1e-6
-        eps = torch.randn_like(std)
-        return mu + eps * std
+        self.fc = nn.Linear(216, 1)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         
         h = self.encoder(x)
-        #torch.Size([20, 55296])
-
-        mu, logvar = self.fc1(h), self.fc2(h)
-        z = self.reparameterize(mu, logvar) 
-        z = self.fc3(z) 
-        #torch.Size([20, 27648])
-           
-        y = self.decoder(z)
-        weibull_params = 1
-
+        output = F.sigmoid(self.fc(h))
+        return output
     
-        return y, z, logvar, mu, weibull_params
-    
-
-
-# Training 
-# input size torch.Size([4, 1, 96, 96, 96])
-# embed size torch.Size([4, 1, 1, 512])
-# torch.Size([4, 16, 48, 48, 48])
-# torch.Size([4, 32, 24, 24, 24])
-# torch.Size([4, 64, 12, 12, 12])
-# torch.Size([4, 128, 6, 6, 6])
-# torch.Size([4, 256, 6, 6, 6])
-# torch.Size([4, 256, 6, 6, 6])
-# torch.Size([4, 128, 6, 6, 6])
-# torch.Size([4, 64, 12, 12, 12])
-# torch.Size([4, 32, 24, 24, 24])
-# torch.Size([4, 16, 48, 48, 48])
-# torch.Size([4, 2, 96, 96, 96])
-
-# Validation 
-# input size torch.Size([4, 1, 96, 96, 96])
-# embed size torch.Size([4, 1, 1, 512])
-# torch.Size([4, 16, 48, 48, 48])
-# torch.Size([4, 32, 24, 24, 24])
-# torch.Size([4, 64, 12, 12, 12])
-# torch.Size([4, 128, 6, 6, 6])
-# torch.Size([4, 256, 6, 6, 6])
-# torch.Size([1, 256, 6, 6, 6])
-# error 
-
-

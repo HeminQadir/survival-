@@ -8,7 +8,6 @@ from monai.networks.nets import SwinUNETR, UNet
 from models.MyUNet import MyUNet
 from models.VAE_UNET import VAE_UNET
 from models.SURV_VAE_UNET import SURV_VAE_UNET
-from models.Discriminator import Discriminator
 from monai.networks.layers import Norm
 
 from monai.data import decollate_batch
@@ -66,19 +65,11 @@ def validation(args, model, validation_loader, MSE_loss, SSIM_loss, phase="train
     return val_inputs, epoch_loss/len(epoch_iterator), val_outputs
 
 
-def train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimizerD, scaler, scalerD):
+def train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler):
     model.train()
-    D.train()
     epoch_loss = 0
     epoch_kl = 0
-    epoch_disc = 0
-    
     epoch_iterator = tqdm(train_loader, desc="Training (X / X Steps) (loss=X.X)", dynamic_ncols=True)
-
-    #These things are for the D
-    real_label = torch.ones(args.batch_size * args.num_samples, 1).to(args.device)  
-    fake_label = torch.zeros(args.batch_size * args.num_samples, 1).to(args.device) 
-    criterion = torch.nn.BCELoss()
 
     for step, batch in enumerate(epoch_iterator):
         x, y, event, s_time = (batch["image"].to(args.device), 
@@ -86,86 +77,32 @@ def train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimize
                                batch['event'].to(args.device), 
                                batch['time'].to(args.device))
 
-        # This the G 
-        logit_map, z, log_var, mu, weibull_params = model(x)
-        x_rec = torch.sigmoid(logit_map)
-        mse_loss = MSE_loss(x_rec, x)
-        ssim_loss = SSIM_loss(x_rec, x)
-        kl_divergence = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
-        kl_weight = 0.00025
-        
-    
-        z = torch.randn(args.batch_size * args.num_samples, 1024, requires_grad=False).to(args.device) 
-        z = model.fc3(z)
-        x_rand = model.decoder(z)
-        
-        
-        ###############################################
-        # Train D 
-        ###############################################
-        #Real loss
-        optimizerD.zero_grad()
-        
-        d_real_loss = criterion(D(x), real_label)
-        d_fake_loss = criterion(D(x_rand), fake_label)
-        d_recon_loss = criterion(D(x_rec), fake_label)
-        
-        dis_loss = d_real_loss + d_fake_loss + d_recon_loss
-        dis_loss.backward(retain_graph=True)
-        
-        optimizerD.step()
-        
-        
-        # scalerD.scale(disc_loss).backward(retain_graph=True)
-        # scalerD.unscale_(optimizerD)
-        # scalerD.step(optimizerD)
-        # scalerD.update()
-        # optimizerD.zero_grad()
-        
+        with torch.cuda.amp.autocast():
+            logit_map, z, log_var, mu, weibull_params = model(x)
+            logit_map = torch.sigmoid(logit_map)
+            mse_loss = MSE_loss(logit_map, x)
+            ssim_loss = SSIM_loss(logit_map, x)
+            kl_divergence = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
+            kl_weight = 0.00025
+            #kl_divergence = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+            loss = mse_loss + ssim_loss + (kl_weight * kl_divergence)
 
-        ###############################################
-        # Train G
-        ###############################################
+
+        scaler.scale(loss).backward()
+        epoch_loss += loss.item()
+        scaler.unscale_(optimizer)
+        scaler.step(optimizer)
+        scaler.update()
         optimizer.zero_grad()
-        
-        output_x = D(x)
-        d_real_loss = criterion(output_x, real_label)
-        output_rec = D(x_rec)
-        d_recon_loss = criterion(output_rec, fake_label)
-        output_z = D(x_rand)
-        d_fake_loss = criterion(output_z, fake_label)
-
-        
-        d_img_loss = d_real_loss + d_recon_loss+ d_fake_loss
-        gen_img_loss = -d_img_loss
-        gamma = 20
-        err_dec = gamma * (mse_loss + ssim_loss) + gen_img_loss + (kl_weight * kl_divergence)
-
-        
-        err_dec.backward(retain_graph=True)
-        optimizer.step()
-        
-        
-        # scaler.scale(loss).backward()
-        # epoch_loss += loss.item()
-        # scaler.unscale_(optimizer)
-        # scaler.step(optimizer)
-        # scaler.update()
-        # optimizer.zero_grad()
-        
-
 
         epoch_iterator.set_description(
-            "Epoch=%d: Training (%d / %d Steps) (total_loss=%2.5f) (Dis loss= %2.5f)" % (
-                args.epoch, step, len(train_loader), err_dec.item(), dis_loss.item())
+            "Epoch=%d: Training (%d / %d Steps) (total_loss=%2.5f)" % (
+                args.epoch, step, len(train_loader), loss.item())
         )
 
-
-        epoch_loss += err_dec.item()
+        epoch_loss += loss.item()
 
         epoch_kl += kl_divergence.item()
-        
-        epoch_disc+=dis_loss.item()
 
         #torch.cuda.empty_cache()
 
@@ -234,17 +171,6 @@ def model_setup(args):
     # send the model to cuda if available  
     model = model.to(args.device)
 
-    D = Discriminator(
-                spatial_dims=3,
-                in_channels=1,
-                out_channels=args.no_class,
-                channels=(16, 32, 64, 128, 256),
-                strides=(2, 2, 2, 2, 1),
-                num_res_units=0,
-                norm=Norm.BATCH
-                )
-    D = D.to(args.device)
-
     args.save_directory = os.path.join(args.save_directory, args.model_name)
 
     args.path_to_save_results = os.path.join(args.path_to_save_results, args.model_name)
@@ -253,9 +179,6 @@ def model_setup(args):
         # print the model architecture and number of parameters 
         print(model)
         count_parameters(model)
-        print("this is the discriminator")
-        print(D)
-        count_parameters(D)
 
     # Define the path to the saved model file
     saved_model_path = os.path.join(args.save_directory, "best_metric_model.pth")
@@ -284,7 +207,7 @@ def model_setup(args):
     else: 
         raise ValueError("Invalid phase. Please choose 'train' or 'test'.")
 
-    return model, D
+    return model
 
 
 def validation_old(args, model, validation_loader, post_label, post_pred, dice_metric):

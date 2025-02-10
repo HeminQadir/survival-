@@ -345,7 +345,6 @@ class VAE_UNET(nn.Module):
             adn_ordering=self.adn_ordering,
             )
         
-
     # def reparameterize(self, mu, log_var):
     #     std = torch.exp(0.5 * log_var)
     #     eps = torch.randn_like(std)
@@ -385,12 +384,12 @@ class VAE_UNET(nn.Module):
         # torch.Size([4, 256, 6, 6, 6])
         mu = self.conv_mu(torch.cat([x4], dim=1))
         logvar = self.conv_logvar(torch.cat([x4], dim=1))
-        y = self.reparameterize(mu, logvar) 
+        z = self.reparameterize(mu, logvar) 
         #printy.shape)
         #torch.Size([4, 128, 6, 6, 6])
 
         # Decoder Part 
-        y = self.conv_transpose_1(y) 
+        y = self.conv_transpose_1(z) 
         #printy.shape)
         y = self.conv_transpose_2(y) 
         #printy.shape)
@@ -400,8 +399,12 @@ class VAE_UNET(nn.Module):
         #printy.shape)
         
         #print"The end of the model")
+        weibull_params = 1
 
-        return y
+    
+        return y, z, logvar, mu, weibull_params
+
+    
     
 
 

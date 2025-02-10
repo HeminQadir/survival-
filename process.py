@@ -22,7 +22,7 @@ import torchvision
 def process(args):
 
     # Setup the model 
-    model = model_setup(args) 
+    model, D = model_setup(args) 
 
     # check if this directory is available, if not make it 
     make_dir(args.save_directory)
@@ -38,16 +38,11 @@ def process(args):
     SSIM_loss = SSIMLoss3D(window_size=11, reduction='mean', channel=1)
 
     #loss_function = DiceLoss(to_onehot_y=True, softmax=True)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
     scaler = torch.cuda.amp.GradScaler()
     
-    # Initialize the metric objects. Set data_range according to your image scaling.
-    #psnr_metric = PeakSignalNoiseRatio(data_range=1.0)
-    #ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0)
-
-    #post_label = AsDiscrete(to_onehot=args.no_class)
-    #post_pred = AsDiscrete(argmax=True, to_onehot=args.no_class)
-    #dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
+    optimizerD = torch.optim.Adam(D.parameters(), lr=args.lr)
+    scalerD = torch.cuda.amp.GradScaler()
 
     loss_val_best = 100.0
     
@@ -58,7 +53,7 @@ def process(args):
 
         try: 
             # Traininig 
-            ave_loss, kl_loss = train(args, model, train_loader, MSE_loss, SSIM_loss, optimizer, scaler)
+            ave_loss, kl_loss = train(args, model, D, train_loader, MSE_loss, SSIM_loss, optimizer, optimizerD, scaler, scalerD)
             writer.add_scalar('train_loss', ave_loss, args.epoch)
             writer.add_scalar('train_kl_loss', kl_loss, args.epoch)
             
