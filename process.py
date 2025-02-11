@@ -22,7 +22,7 @@ import torchvision
 def process(args):
 
     # Setup the model 
-    model = model_setup(args) 
+    encoder,decoder,discriminator = model_setup(args) 
 
     # check if this directory is available, if not make it 
     make_dir(args.save_directory)
@@ -37,23 +37,14 @@ def process(args):
     # MSE_loss = MSELoss(reduction='mean')
     # SSIM_loss = SSIMLoss3D(window_size=11, reduction='mean', channel=1)
     # SURV_loss = LogLikelihoodLossWithCensoring(dist_type='weibull')
-
+    
 
 
     #loss_function = DiceLoss(to_onehot_y=True, softmax=True)
-    optimizer_Enc = torch.optim.Adam(
-        list(model.encoder.parameters()) + 
-        list(model.conv_mu.parameters()) + 
-        list(model.conv_logvar.parameters()),
-        lr=args.lr
-    )
-    optimizer_Dec = torch.optim.Adam(
-        model.decoder.parameters(), 
-        lr=args.lr
-    )
+    optimizer_Enc = torch.optim.Adam(encoder.parameters(),lr=args.lr)
+    optimizer_Dec = torch.optim.Adam(decoder.parameters(),lr=args.lr)
+    optimizer_Dis = torch.optim.Adam(discriminator.parameters(),lr=args.lr)
 
-
-    optimizer_D = torch.optim.Adam(model.discriminator.parameters(), lr=args.lr)
     criterion_mse = torch.nn.MSELoss()
     criterion_bce = torch.nn.BCELoss()
     #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #, weight_decay=args.weight_decay)
@@ -76,22 +67,22 @@ def process(args):
 
         try: 
             # Traininig 
-            ave_loss, _,_= train(args, model, train_loader, optimizer_Enc, optimizer_Dec, optimizer_D ,criterion_bce,criterion_mse, scaler)
+            ave_loss, _,_= train(args, encoder,decoder,discriminator, train_loader, optimizer_Enc, optimizer_Dec, optimizer_Dis ,criterion_bce,criterion_mse, scaler)
             writer.add_scalar('train_loss', ave_loss, args.epoch)
 
             if (args.epoch % args.store_num == 0 and args.epoch != 0):
-                    torch.save(model.state_dict(), os.path.join(args.save_directory, "model_epoch_"+str(args.epoch)+"_.pth"))
+                    torch.save(encoder.state_dict(), os.path.join(args.save_directory, "model_epoch_"+str(args.epoch)+"_.pth"))
 
             # Validation 
             if (args.epoch % args.val_interval == 0):
                 print("starting the validation phase")
-                loss_val, _,_ ,val_outputs= validation(args, model, val_loader, criterion_bce,criterion_mse, phase="validation") 
-                loss_train, _,_, val_outputs = validation(args, model, subset_loader,criterion_bce, criterion_mse, phase="train") 
+                loss_val, _,_ ,val_outputs= validation(args, encoder, val_loader, criterion_bce,criterion_mse, phase="validation") 
+                loss_train, _,_, val_outputs = validation(args,encoder, subset_loader,criterion_bce, criterion_mse, phase="train") 
 
                 if loss_val < loss_val_best:
                     loss_val_best = loss_val
 
-                    torch.save(model.state_dict(), os.path.join(args.save_directory, "best_metric_model.pth"))
+                    torch.save(encoder.state_dict(), os.path.join(args.save_directory, "best_metric_model.pth"))
                     print(
                         "Model Was Saved ! Current Best Avg. Rec Loss: {} Current Avg. Rec Loss: {}".format(loss_val_best, loss_val)
                     )
@@ -112,13 +103,13 @@ def process(args):
                 writer.add_image('rec image', torch.tensor(val_outputs[0, :, :, slice_index]), global_step=args.epoch+1)
 
         except: 
-            torch.save(model.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
+            torch.save(encoder.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
 
         
         args.epoch += 1
         #print(args.epoch)
 
-    torch.save(model.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
+    torch.save(encoder.state_dict(), os.path.join(args.save_directory, "last_epoch_model.pth"))
     print(f"train completed, best_metric: {loss_val_best:.4f}" f"at iteration: {args.epoch}")
 
 
